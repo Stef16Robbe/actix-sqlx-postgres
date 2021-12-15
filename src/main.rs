@@ -1,8 +1,12 @@
 use serde::Serialize;
+use mime::APPLICATION_JSON;
+use actix_web::http::header;
 use sqlx::{Pool, Postgres};
 use sqlx::postgres::{PgConnectOptions, PgSslMode};
 use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 
+// TODO:
+// use serde lol
 #[derive(Debug, Serialize)]
 pub struct User {
     pub id: i32,
@@ -10,13 +14,12 @@ pub struct User {
 }
 
 impl User {
-    pub async fn find_by_id(id: i32, pool: &Pool<Postgres>) -> Result<User, &str> {
-        // TODO:
+    pub async fn find_by_id(id: i32, pool: &Pool<Postgres>) -> Result<User, sqlx::Error> {
         // https://docs.rs/sqlx/0.5.9/sqlx/macro.query.html#query-arguments
-        let user = sqlx::query_as!(User, "SELECT * FROM postgresactix.users WHERE id = 1")
+        let user = sqlx::query_as!(User, "SELECT * FROM postgresactix.users WHERE id = $1", id)
             .fetch_one(&*pool)
-            .await.unwrap();
-
+            .await?;
+        
         Ok(user)
     }
 
@@ -29,7 +32,9 @@ impl User {
 async fn users(pool: web::Data<Pool<Postgres>>) -> impl Responder {
     let user = User::find_by_id(1, &pool).await.unwrap();
 
-    HttpResponse::Ok().body(user.to_string())
+    HttpResponse::Ok()
+        .append_header(header::ContentType(APPLICATION_JSON))
+        .body(user.to_string())
 }
 
 // cargo install cargo-watch
@@ -40,6 +45,8 @@ async fn users(pool: web::Data<Pool<Postgres>>) -> impl Responder {
 async fn main() -> std::io::Result<()> {
     // TODO:
     // env
+    // middleware
+    // mod
     let conn = PgConnectOptions::new()
         .host("localhost")
         .port(5432)
