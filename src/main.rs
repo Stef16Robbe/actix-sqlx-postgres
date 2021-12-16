@@ -1,13 +1,13 @@
-use serde::Serialize;
+use std::env;
+use dotenv::dotenv;
+use sqlx::{Pool, Postgres};
 use mime::APPLICATION_JSON;
 use actix_web::http::header;
-use sqlx::{Pool, Postgres};
+use serde::{Serialize, Deserialize};
 use sqlx::postgres::{PgConnectOptions, PgSslMode};
 use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 
-// TODO:
-// use serde lol
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct User {
     pub id: i32,
     pub name: String,
@@ -22,40 +22,35 @@ impl User {
         
         Ok(user)
     }
-
-    pub fn to_string(&self) -> String {
-        format!("{{id: {}, name: {}}}", &self.id, &self.name)
-    }
 }
 
 #[get("/users")]
 async fn users(pool: web::Data<Pool<Postgres>>) -> impl Responder {
     let user = User::find_by_id(1, &pool).await.unwrap();
+    let json = serde_json::to_string_pretty(&user).unwrap();
 
     HttpResponse::Ok()
         .append_header(header::ContentType(APPLICATION_JSON))
-        .body(user.to_string())
+        .body(json)
 }
 
-// cargo install cargo-watch
-// cargo watch -x 'run --bin {APP_NAME}'
-// https://actix.rs/book/actix/
-// https://github.com/actix/examples/blob/master/database_interactions/sqlx_todo/src/main.rs
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    // TODO:
-    // env
-    // middleware
-    // mod
+    dotenv().ok();
+
+    let host = env!("HOST");
+    let port = env!("PORT").parse::<u16>().unwrap();
+    let username = env!("NAME");
+    let password = env!("PASSWORD");
+
     let conn = PgConnectOptions::new()
-        .host("localhost")
-        .port(5432)
-        .username("postgres")
-        .password("2115")
+        .host(host)
+        .port(port)
+        .username(username)
+        .password(password)
         .ssl_mode(PgSslMode::Prefer);
 
     let pool = Pool::<Postgres>::connect_with(conn).await.unwrap();
-
     let data = web::Data::new(pool);
 
     HttpServer::new(move || {
