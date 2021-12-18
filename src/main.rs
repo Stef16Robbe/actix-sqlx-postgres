@@ -1,37 +1,21 @@
 use std::env;
 use dotenv::dotenv;
 use sqlx::{Pool, Postgres};
-use mime::APPLICATION_JSON;
-use actix_web::http::header;
-use serde::{Serialize, Deserialize};
 use sqlx::postgres::{PgConnectOptions, PgSslMode};
-use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{web, App, HttpServer, middleware, Responder, HttpResponse};
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct User {
-    pub id: i32,
-    pub name: String,
-}
+mod user;
+mod routes;
 
-impl User {
-    pub async fn find_by_id(id: i32, pool: &Pool<Postgres>) -> Result<User, sqlx::Error> {
-        // https://docs.rs/sqlx/0.5.9/sqlx/macro.query.html#query-arguments
-        let user = sqlx::query_as!(User, "SELECT * FROM postgresactix.users WHERE id = $1", id)
-            .fetch_one(&*pool)
-            .await?;
-        
-        Ok(user)
-    }
-}
-
-#[get("/users")]
-async fn users(pool: web::Data<Pool<Postgres>>) -> impl Responder {
-    let user = User::find_by_id(1, &pool).await.unwrap();
-    let json = serde_json::to_string_pretty(&user).unwrap();
-
-    HttpResponse::Ok()
-        .append_header(header::ContentType(APPLICATION_JSON))
-        .body(json)
+// root (/) handler
+async fn index() -> impl Responder {
+    HttpResponse::Ok().body(
+        r#"
+        Welcome to Actix-web with SQLx postgres example.
+        Available routes:
+        GET /users/{id} -> get a user by it's id
+        "#
+    )
 }
 
 #[actix_web::main]
@@ -56,7 +40,9 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(data.clone())
-            .service(users)
+            .wrap(middleware::Logger::default())
+            .route("/", web::get().to(index))
+            .configure(user::init)
     })
     .bind("127.0.0.1:8080")?
     .run()
